@@ -1,258 +1,362 @@
-# SecPump :syringe: 
-
-SecPump is an open wireless insulin pump system workbench that models the insulin kinetics based on the modified Bergman's minimal model. The system workbench is primarily tailored for security assessments and countermeasures development against the numerous security flaws related to wearable medical devices. The platform is open-source and free from commercials constraints making it a suitable target to perform both hardware and software security demonstrations. SecPump aims at being straightforward to use, it only requires an inexpensive Nucleo F446-RE STM32 board with the BlueNRG extension or an Arty A7-35T Digilent FPGA.
-
-<p align="center">
-    <img src="https://github.com/r3glisss/SecPump/blob/master/Img/SecPump_Overview.JPG">
-</p>
-
-## Context
-
-SecPump is a research project designed in collaboration with the [LCIS](https://lcis.grenoble-inp.fr/le-laboratoire), the [University of Arizona](https://www.arizona.edu/), and the [SERENE-IoT project](http://serene.minalogic.net/). SERENE-IoT aims at contributing to developing high quality connected care services and diagnostic tools based on Advanced Smart Health-Care IoT Devices. This platform intends to provide a framework for security evaluation, tailored for countermeasures development against the numerous security flaws related to medical devices. 
-
-## Why an open-platform?
-
-Wireless insulin pumps are considered life-critical embedded systems. While these devices are promising innovation, there are vulnerable to a wide range of cyber-attacks. Unfortunately, due to the lack of openness to research and commercial constraints, security researchers cannot freely demonstrate security issues on these devices. Besides, the security countermeasures assessments can be difficult without an open-model. Here comes SecPump! The repository provides: 
-
-- An abstract representation of a wireless wearable insulin pump that models the blood glucose regulation within the human body. The open-source code base of the pump can be extended and improved for various demonstrations including cyber-physical system design, automation (PID regulation), security, and safety. 
-
-- A software security demonstration based on advanced memory corruption exploitation. This demonstration exploits an intentional stack-based buffer overflow bug introduced in a vulnerable BLE characteristic. The bug allows an attacker to maliciously modify the functioning of the cyber-physical system at run-time. Such an attack, here, raises the amount of insulin injected over time.
-
-## General description
-
-SecPump is a wireless insulin pump and insulin kinetics simulator. The vanilla version of the system workbench (version without any security issue) requires an STM32 board with the BlueNRG extension and a computer or a Raspberry Pi running Python. A simplified version of the system workbench can also be executed on a RISC-V-based FPGA. The computer/Raspberry Pi models the human body kinetics over time based on Bergman's differential equations. In other words, it models how blood glucose reacts based on the insulin level in the human body. In our case, the computer/Raspberry Pi models the blood glucose of a diabetic. As a diabetic does not produce insulin, the latter should be injected thanks to an artificial pancreas such as an insulin pump. The STM32 or FPGA is only the insulin pump of the whole system. To represent the physical link between a theoretical diabetic and the wireless pump, the STM32 or FPGA is connected via the serial port to the computer/Raspberry Pi. Over time, the computer/Rasperry Pi sends the amount of glucose of the diabetic to the STM32 or FPGA that computes the amount of insulin to inject accordingly. The amount of insulin to inject by the pump is computed thanks to an integrated PID. SecPump is then a closed-loop regulation system. As a note, SecPump can also be programmed as an open-loop system when the amount of insulin to inject can be manually configured using a BLE interface (smartphone or BLE python script).
-i
-
-## Get started
-
-The repository contains three folders: "Scripts" contains the human body simulation scripts, the PC interface with the pump, and a BLE communication script. "SecPump-Vanilla" contains the model of the functional pump, "SecPump-Security-Demo" is a deliberately vulnerable modified version of the pump, and finally, "SecPump-RISC-V" contains the RISC-V version of the model.
-
-### Requirements
-
-To run the vanilla system it is mandatory to have a Nucleo F446-RE STM32 board with the BlueNRG extension, a Linux computer with a BLE connection (if possible). See the "SecPump-RISC-V" folder for the FPGA version. 
-
-To replay the attack it is preferable to have two computers available both based on Linux, one of which should include a functional BLE stack.
-
-SecPump requires an [ARM-based bare-metal cross compiler](https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-a/downloads?fbclid=IwAR2I_6zIP3RlRHWNmEP8ILh4RCU_YZxbl81QFU_9FZ7fBnJA82Z5OmoFixg). Make sure the latter is in your path.
-
-You can grab it using the following commands:
-~~~bash
-wget https://developer.arm.com/-/media/Files/downloads/gnu-rm/8-2018q4/gcc-arm-none-eabi-8-2018-q4-major-linux.tar.bz2
-tar xfj gcc-arm-none-eabi-8-2018-q4-major-linux.tar.bz2
-echo "export PATH=\$PATH:$(pwd)"\/gcc-arm-none-eabi-8-2018-q4-major-linux\/bin >> ~/.bashrc
-source ~/.bashrc
-~~~
-
-Install the python dependencies, it is recommended to use a dedicated new python environment: 
-
-~~~bash
-pip install -r Scripts/requirements.txt
-~~~
-
-## SecPump Vanilla
-
-First of all, you have to get into the right folder:
-~~~bash
-cd SecPump-Vanilla
-~~~
-
-Connect the STM32 to your computer. Then, compile the firmware:
-~~~bash
-make clean all
-~~~
-
-Open a new terminal to observe the output of the UART from the board:
-~~~bash
-screen /dev/ttyACM0 115200 # check UART device first
-~~~
-
-Flash the STM32:
-~~~bash
-./Flash.sh
-~~~
-
-If everything went well, you should observe this output on your UART terminal:
-~~~
-==== SECPUMP INIT====
-Hardware version: 49
-Firmware version: 1813
-
-[*] BLE Stack Initialized.
-[*] SERVER: BLE Stack Initialized.
-[+] SecPump Service Created. Handle 0x000C
-[+] MODE Charac handle: 0x000D
-[+] BOLUS Charac handle: 0x0010
-[*] SecPump service added successfully.
-[*] General Discoverable Mode.
-~~~
-
-At this point, the pump is waiting to be connected to the insulin kinetic Simulator (based on the extended Bergman's model). This simulator uses the UART to communicate with the standby pump. Therefore, the UART console must first be closed:
-~~~bash
-ctrl+A+k # screen command
-~~~
-
-Then, you can connect the simulator with the pump:
-~~~bash
-cd Scripts
-python Sec-Interface.py
-~~~
-
-A 24-hour simulation is launched (displayed below). The diabetic blood glucose is modeled by the python script and the STM32-based pump regulates it with insulin using an integrated PID.
-
-<p align="center">
-    <img src="https://github.com/r3glisss/SecPump/blob/master/Img/Sec-Vanilla.gif">
-</p>
-
-**WARNING: Always reset the pump before running a simulation !**
-
-The pump can be switched to "MANUAL MODE" for insulin step regulation. The configuration change is achieve using BLE. 
-
-There are two options to make this change:
-
-**(Option 1):** Do it from a smartphone and an application such as "BLE Scanner" to connect to a BLE device.
-
-With "BLE Scanner" connect to SecPump:
-<p align="center">
-    <img src="https://github.com/r3glisss/SecPump/blob/master/Img/BLE-Notifier-11.jpg">
-</p>
-
-Click on "W" for the first BLE characteristic, and write "1" in text. This will change the pump mode to "MANUAL". (Write 0 to change back to AUTO, or simply reset the pump):
-<p align="center">
-    <img src="https://github.com/r3glisss/SecPump/blob/master/Img/BLE-Notifier-21.jpg">
-</p>
-
-
-Click on "W" for the second BLE characteristic, and write the insulin step to inject. (ex: 15):
-<p align="center">
-    <img src="https://github.com/r3glisss/SecPump/blob/master/Img/BLE-Notifier-22.jpg">
-</p>
-
-By relaunching a simulation you should get the following display:
-
-<p align="center">
-    <img src="https://github.com/r3glisss/SecPump/blob/master/Img/Sec-Vanilla-Manual.gif">
-</p>
-
-**(Option 2, Requires BLE Stack on Linux):** Connect to SecPump using the provided python script:
-
-~~~bash
-cd Scripts
-python BlueCmd.py
-~~~
-
-Once the connection is established, the script allows us to change the operating mode and to program insulin injection steps.
-
-~~~
-[*] Scanning For Device
-[*] Discovered device f8:1d:78:63:1d:b6
-[*] Discovered device 65:55:21:14:e1:2b
-[*] Discovered device 02:80:e1:00:34:12
-Device 65:55:21:14:e1:2b (random), RSSI=-71 dB
-  Flags = 1a
-  Tx Power = 0c
-  Manufacturer = 4c0010051118028ff6
-Device f8:1d:78:63:1d:b6 (public), RSSI=-96 dB
-  Flags = 05
-  Complete 16b Services = 0000fff0-0000-1000-8000-00805f9b34fb,0000ffe5-0000-1000-8000-00805f9b34fb,0000ffe0-0000-1000-8000-00805f9b34fb
-Device 02:80:e1:00:34:12 (public), RSSI=-71 dB
-  Flags = 06
-  Tx Power = fe
-  Complete Local Name = SecPump
-[+] Found Medical Pump
-[*] Connecting to Device...
-[*] Discovering Services...
-Service <uuid=Generic Attribute handleStart=1 handleEnd=4>
-Service <uuid=Generic Access handleStart=5 handleEnd=11>
-Service <uuid=42821a40-e477-11e2-82d0-0002a5d5c51b handleStart=12 handleEnd=18>
-[*] Accessing Pump Service
-[*] Getting MODE characteristic
-[*] Getting BOLUS characteristic
-
-(1) MODE
-(2) BOLUS
-        Choice?1
-Msg >1
-
-(1) MODE
-(2) BOLUS
-        Choice?15
-~~~
-
-### Cyber-physical device research
-
-The "Script" folder also contains a python file named "Model-Sim". This file allows us to make a simulation of the whole system (SecPump+Insulin kinetics regulation) without the STM32. This script allows for instance to adapt the PID coefficients of the pump without having to reflash the STM32 and re-setup the whole system.
-
-## SecPump Security Demonstration
-
-To replay the attack, you have to flash the STM32 with the vulnerable firmware. The latter suffers from an intentional buffer overflow in a new vulnerable characteristic called "VULNERABLE".
-
-To perform the demo it is recommended to have two computers. One is connected to SecPump and displays the pump functioning while the other one has a native Linux with a function BLE stack to perform the remote attack.
-
-While this repo provides the access to the vulnerable code, if you recompile the vulnerable firmware the provided attack won't probably work without adapting the provided exploit.
-
-So, simply flash the STM32 with the pre-compiled provided vulnerable firmware, on the first computer. 
-
-~~~ bash
-cd SecPump-Vuln/Vulnerable-Firmware
-./Flash_Vuln.sh
-~~~
-
-As the SecPump-Vanilla version, launch the simulation script.
-
-~~~bash
-cd Scripts
-python Sec-Interface.py
-~~~
-
-While the pump is now regulating the blood glucose, it is time to launch the remote attack that exploits the buffer overflow vulnerability in the firmware.
-
-On your second computer, disjoined from the main computer, launch the following command:
-
-~~~
-cd Scripts
-python Exploit.py
-~~~
-
-The exploit script automatically finds the wireless pump and performs the payload injection on the vulnerable BLE characteristic:
-
-<p align="center">
-    <img src="https://github.com/r3glisss/SecPump/blob/master/Img/Xploit.gif">
-</p>
-
-After a couple of seconds, the amount of insulin injected by the pump should raise considerably being lethal for the patient:
-
-<p align="center">
-    <img src="https://github.com/r3glisss/SecPump/blob/master/Img/Sec-Vuln.gif">
-</p>
-
-## License
-
-This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, in version 3. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-## Attribution
-
-If used for research, please cite the SecPump publication: https://ieeexplore.ieee.org/document/9031704
-
-C. Bresch, D. Hély, S. Chollet, and R. Lysecky, *“SecPump: A Connected Open Source Infusion Pump for Security Research Purposes,”* IEEE Embedded Systems Letters, 2020.
-
-~~~Latex
-@article{bresch2020secpump,
-  title={SecPump: A Connected Open Source Infusion Pump for Security Research Purposes},
-  author={Bresch, Cyril and H{\'e}ly, David and Chollet, St{\'e}phanie and Lysecky, Roman},
-  journal={IEEE Embedded Systems Letters},
-  year={2020},
-  publisher={IEEE}
-}
-~~~
-
-## Acknowledgements
-
-This work is carried out under the SERENE-IoT project, a project labeled within the framework of PENTA, the EUREKA Cluster for Application and Technology Research in Europe on NanoElectronics.
-
-This work is supported by the French National Research Agency in the framework of the “Investissement d’avenir” program (ANR-16-IDEX-02)
-
-This research was partially supported by the National Science Foundation under Grant CNS-1615891.
-
-## Contact
-
-cyrbresch[at]gmail[dot]com
+# SiFive Freedom E SDK README #
+
+This repository, maintained by SiFive Inc, makes it easy to get started developing
+software for the Freedom E and Freedom S Embedded RISC-V Platforms. This SDK
+is intended to work on any target supported by SiFive's distributions of the
+RISC-V GNU Toolchain.
+
+[Documentation for Freedom E SDK is available here](https://sifive.github.io/freedom-e-sdk-docs/index.html)
+
+Freedom E SDK was recently transitioned to using the Freedom Metal compatibility
+library. If you're looking for the old Freedom E SDK, software examples, and
+board support files, you can find those on the [v1\_0 branch](https://github.com/sifive/freedom-e-sdk/tree/v1_0).
+
+#### What is Freedom Metal? ###
+
+[Freedom Metal](https://github.com/sifive/freedom-metal) ([Documentation](https://sifive.github.io/freedom-metal-docs/index.html))
+is a library developed by SiFive for writing portable software for all of SiFive's
+RISC-V IP, RISC-V FPGA evaluation images, and development boards. Programs written
+against the Freedom Metal API are intended to build and run for all SiFive RISC-V
+targets. This makes Freedom Metal suitable for writing portable tests, bare metal
+application programming, and as a hardware abstraction layer for porting
+operating systems to RISC-V.
+
+### Contents ###
+
+#### Freedom Metal Compatibility Library ####
+
+* Board Support Packages (found under `bsp/`)
+  - Supported Targets:
+    - [SiFive HiFive 1](https://www.sifive.com/boards/hifive1)
+      - sifive-hifive1
+    - [SiFive HiFive 1 Rev B](https://www.sifive.com/boards/hifive1-rev-b)
+      - sifive-hifive1-revb
+    - [SiFive HiFive Unleashed](https://www.sifive.com/boards/hifive-unleashed)
+      - sifive-hifive-unleashed
+    - [SiFive Freedom E310 Arty](https://github.com/sifive/freedom)
+      - freedom-e310-arty
+    - [QEMU Emulation of the SiFive E31](https://github.com/sifive/freedom-tools)
+      - qemu-sifive-e31
+    - [QEMU Emulation of the SiFive S51](https://github.com/sifive/freedom-tools)
+      - qemu-sifive-s51
+    - [QEMU Emulation of the SiFive U54](https://github.com/sifive/freedom-tools)
+      - qemu-sifive-u54
+    - [QEMU Emulation of the SiFive U54MC](https://github.com/sifive/freedom-tools)
+      - qemu-sifive-u54mc
+    - [Spike RISC-V ISA Emulator](https://github.com/riscv/riscv-isa-sim)
+      - spike
+  - The board support files for the Freedom Metal library are located entirely
+    within a single target directory in `bsp/<target>/`. For example, the HiFive 1
+    board support files for Freedom Metal are entirely within `bsp/sifive-hifive1/`
+    and consist of the following:
+    * design.dts, core.dts
+      - The DeviceTree description of the target. This file is used to parameterize
+        the Freedom Metal library to the target device. Modifications to these files
+        are propagated to the generated files by freedom-devicetree-tools.
+    * metal.h, metal-inline.h
+      - The Freedom Metal machine headers are generated files which are used internally
+        to Freedom Metal to instantiate structures to support the target device.
+    * metal-platform.h
+      - The Freedom Metal platform header provides a list of C proprocessor definitions
+        which are used by Freedom Metal to indicate the presence of devices and provide
+        the memory-mapped register interface for each device. The contents of this header
+        is considered public API surface of the Metal library and can be used in applications
+        by including `metal/machine/platform.h`.
+    * metal.%.lds
+      - Generated linker scripts for the target. The different scripts allow
+        for different memory configurations.
+    * openocd.cfg (for development board and FPGA targets)
+      - Used to configure OpenOCD for flashing and debugging the target device.
+    * settings.mk
+      - Includes a variety of parameters which affect the build system for the target, including
+        the RISC-V ISA string, the selected ABI, the code model, and more.
+* [FreeRTOS](https://www.freertos.org/) (found under `FreeRTOS-metal/`):
+  - A class of RTOS that is designed to be small enough to run on a microcontroller
+  - Provided here under its own license
+* A Few Example Programs (found under `software/`)
+  - empty
+    - An empty project. Serves as a good starting point for your own program.
+  - hello
+    - Prints "Hello, World!" to stdout, if a serial device is present on the target.
+  - sifive-welcome
+    - Prints a welcome message and interacts with the LEDs.
+  - return-pass
+    - Returns status code 0 indicating program success.
+  - return-fail
+    - Returns status code 1 indicating program failure.
+  - example-itim
+    - Demonstrates how to statically link application code into the Instruction
+      Tightly Integrated Memory (ITIM) if an ITIM is present on the target.
+  - software-interrupt
+    - Demonstrates how to register a handler for and trigger a software interrupt
+  - timer-interrupt
+    - Demonstrates how to register a handler for and trigger a timer interrupt
+  - local-interrupt
+    - Demonstrates how to register a handler for and trigger a local interrupt
+  - example-pmp
+    - Demonstrates how to configure a Physical Memory Protection (PMP) region
+  - example-spi
+    - Demonstrates how to use the SPI API to transfer bytes to a peripheral
+  - dhrystone
+    - "Dhrystone" Benchmark Program by Reinhold P. Weicker
+  - coremark
+    - "CoreMark" Benchmark Program that measures the performance of embedded
+      microcrontrollers (MCU)
+  - cflush
+    - A simple example demo how to use cflush (Data) L1 and use FENCE to ensure flush
+      complete. 
+  - example-rtc
+    - Demonstrates how to use the RTC API to start a Real-Time Clock, set a compare
+      value, and handle an interrupt when the clock matches the compare value.
+  - example-watchdog
+    - Demonstrates how to use the Watchdog API to set a watchdog timer to trigger an
+      interrupt on timeout.
+  - example-user-mode
+    - Demonstrates how to drop to user mode privilege level.
+  - example-user-syscall
+    - Demonstrates how to register a handler for the "syscall from user mode" exception,
+      drop to the user mode privilege level, and then issue a syscall.
+  - plic-interrupts
+    - A simple example demonstrating how PLIC interrupts get uses on an Arty board. 
+  - test-coreip
+    - Assembly test code which executes instructions and checks for expected results.
+      The tests are designed to work on SiFive CPU designs in RTL simulation or on the
+      Arty FPGA board. 
+  - clic-vector-interrupts
+    - A simple example demonstrating how to use CLIC non vector interrupts
+  - clic-selective-vector-interrupts
+    - A simple example demonstrating how to use CLIC selective vector interrupts
+  - clic-hardware-vector-interrupts
+    - A simple example demonstrating the use of CLIC hardware vector interrupts
+  - minimal-boot
+    - Demonstrates how to replace the Metal constructors and replace them with your own
+  - atomics
+    - Demonstrates how to use the Metal Atomic API to leverage the RISC-V
+      atomic instruction set.
+  - example-i2c
+    - Demonstrates usage of the I2C API to communicate with I2C slaves.
+  - example-pwm
+    - Demonstrates usage of the PWM API to generate waveforms.
+  - mem-latency
+    - A memory test that measure the latency at different cache layers and memory blocks
+  - example-hpm
+    - Demonstrates usage of the RISC-V hardware performance counter APIs.
+  - example-l2pm
+    - Demonstrates usage of Sifive L2 performance monitor counter APIs to capture L2 cache event logs.
+  - example-l2pf
+    - Example for usage and measuring effectiveness of SiFive L2 Prefetcher.
+  - example-lim
+    - Demonstrates how to designate a function to be linked into the LIM (Loosely-Integrated Memory).
+  - example-freertos-minimal
+    - A simple FreeRTOS skeleton to build your FreeRTOS application.
+  - example-freertos-blinky
+    - A simple FreeRTOS blinky application.
+
+### Setting up the SDK ###
+
+#### Prerequisites ####
+
+To use this SDK, you will need the following software available on your machine:
+
+* GNU Make
+* Git
+* RISC-V GNU Toolchain
+* RISC-V QEMU 4.1.0 (for use with the qemu-sifive-\* simulation targets)
+* RISC-V OpenOCD (for use with development board and FPGA targets)
+* Segger J-LINK (for use with certain development boards)
+* Python >= 3.5
+* Python Virtualenv
+* Python Pip
+
+Details on installing the RISC-V and Segger software follow. 
+
+##### Install the RISC-V Toolchain and OpenOCD #####
+
+The RISC-V GNU Toolchain and OpenOCD are available from the SiFive Website at
+
+https://www.sifive.com/software
+
+For OpenOCD and/or RISC-V GNU Toolchain, download the .tar.gz for your platform,
+and unpack it to your desired location. Then, use the `RISCV_PATH` and
+`RISCV_OPENOCD_PATH` variables when using the tools:
+
+```
+cp openocd-<date>-<platform>.tar.gz /my/desired/location/
+cp riscv64-unknown-elf-gcc-<date>-<platform>.tar.gz /my/desired/location
+cd /my/desired/location
+tar -xvf openocd-<date>-<platform>.tar.gz
+tar -xvf riscv64-unknown-elf-gcc-<date>-<platform>.tar.gz
+export RISCV_OPENOCD_PATH=/my/desired/location/openocd
+export RISCV_PATH=/my/desired/location/riscv64-unknown-elf-gcc-<date>-<version>
+```
+
+##### Install RISC-V QEMU 4.1.0
+
+The RISC-V QEMU Emulator is available from the SiFive Website at
+
+https://www.sifive.com/software
+
+Download the .tar.gz for your platform and unpack it to your desired location.
+Then, add QEMU to your path:
+
+```
+cp riscv-qemu-<version>-<date>-<platform>.tar.gz /my/desired/location
+tar -xvf riscv-qemu-<version>-<date>-<platform>.tar.gz
+export PATH=$PATH:/my/desired/location/riscv-qemu-<version>-<date>-<platform>/bin
+```
+
+##### Install Segger J-Link Software
+
+Some targets supported by Freedom E SDK (like the SiFive HiFive1 Rev B) use
+Segger J-Link OB for programming and debugging. If you intend to use these
+targets, install the Segger J-Link Software and Documentation Pack for your
+machine:
+
+[Segger J-Link Software Downloads](https://www.segger.com/downloads/jlink#J-LinkSoftwareAndDocumentationPack)
+
+#### Cloning the Repository ####
+
+This repository can be cloned by running the following commands:
+
+```
+git clone --recursive https://github.com/sifive/freedom-e-sdk.git
+cd freedom-e-sdk
+```
+
+The `--recursive` option is required to clone the git submodules included in the
+repository. If at first you omit the `--recursive` option, you can achieve
+the same effect by updating submodules using the command:
+
+```
+git submodule update --init --recursive
+```
+
+### Updating your SDK ###
+
+If you'd like to update your SDK to the latest version:
+
+```
+git pull origin master
+git submodule update --init --recursive
+```
+
+### Python ###
+
+Freedom E SDK includes a number of Python scripts used during the build process
+to parameterize the build of Freedom Metal to the target. The dependencies of
+these scripts are tracked in `requirements.txt`. Freedom E SDK manages its own
+virtualenv, but there are some options which allow users to configure the
+virtualenv to best suit your needs.
+
+#### Predownloading Python Dependencies ####
+
+By default, Freedom E SDK will download Python packages from the Python Package
+Index when it creates the virtualenv. If you prefer to download dependencies
+ahead-of-time, you can run
+
+```
+make pip-cache
+```
+
+to download all Python packages. This mechanism downloads all of the dependencies
+pre-compiled for all platforms and Python versions supported by Freedom E SDK, so
+if you're trying to bring up Freedom E SDK on a system without an internet connection
+you can create the "pip cache" and then copy it to the connectionless machine with
+Freedom E SDK.
+
+The location of the "pip cache" can be controlled with the environment variable
+`FREEDOM_E_SDK_PIP_CACHE_PATH`
+
+```
+export FREEDOM_E_SDK_PIP_CACHE_PATH=/path/to/pip-cache
+```
+
+#### Virtualenv Location ####
+
+By default, the virtualenv is created in the `venv` folder at the root of
+Freedom E SDK. To change the location of the virtualenv, set the environment
+variable `FREEDOM_E_SDK_VENV_PATH`
+
+```
+export FREEDOM_E_SDK_VENV_PATH=/path/to/venv
+```
+
+### Using the Tools ###
+
+#### Building an Example ####
+
+To compile a bare-metal RISC-V program:
+
+```
+make [PROGRAM=hello] [TARGET=freedom-e310-arty] [CONFIGURATION=debug] software
+```
+
+The square brackets in the above command indicate optional parameters for the
+Make invocation. As you can see, the default values of these parameters tell
+the build script to build the `hello` example for the `freedom-e310-arty` target
+with the `debug` configuration. If, for example, you wished to build the
+`timer-interrupt` example for the S51 Arty FPGA Evaluation target,
+with the `release` configuration, you would instead run the command
+
+```
+make PROGRAM=timer-interrupt TARGET=coreip-s51-arty CONFIGURATION=release software
+```
+
+##### Building an Benchmark Program ####
+
+Building a benchmark program is slightly special in that certain section is
+required to be loaded in specific memory region. A specialize linker file has
+been created for its optimal run.
+
+```
+make PROGRAM=dhrystone TARGET=coreip-e31-arty LINK_TARGET=ramrodata software
+```
+
+##### Building an Example with FreeRTOS ####
+
+A link target exist specificly for freertos, even if default target might work
+on some examples.
+Here is an exemple of use :
+
+```
+make PROGRAM=example-freertos-blinky-pmp TARGET=sifive-hifive1-revb LINK_TARGET=freertos software
+```
+
+#### Uploading to the Target Board ####
+
+```
+make [PROGRAM=hello] [TARGET=sifive-hifive1] [CONFIGURATION=debug] upload
+```
+
+#### Debugging a Target Program ####
+
+```
+make [PROGRAM=hello] [TARGET=sifive-hifive1] [CONFIGURATION=debug] debug
+```
+
+#### Cleaning a Target Program Build Directory ####
+
+```
+make [PROGRAM=hello] [TARGET=sifive-hifive1] [CONFIGURATION=debug] clean
+```
+
+#### Create a Standalone Project ####
+
+You can export a program to a standalone project directory using the `standalone`
+target. The resulting project will be locked to a specific `TARGET`. Note
+that this functionality is only supported for Freedom Metal programs, not the
+Legacy Freedom E SDK.
+
+`STANDALONE_DEST` is a required argument to provide the desired project location.
+
+```
+make [PROGRAM=hello] [TARGET=sifive-hifive1] [INCLUDE_METAL_SOURCES=1] STANDALONE_DEST=/path/to/desired/location standalone
+```
+
+Run `make help` for more commands.
+
+### For More Information ###
+
+Documentation, Forums, and much more available at
+
+[www.sifive.com](https://www.sifive.com)
