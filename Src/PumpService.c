@@ -10,8 +10,7 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 // This program is part of the SecPump @https://github.com/r3glisss/SecPump
 
-/**
- ******************************************************************************
+/******************************************************************************
  * @file    sensor_service.c
  * @version V1.0.0
  ******************************************************************************
@@ -41,7 +40,7 @@ __IO uint32_t connected = FALSE;
 __IO uint8_t set_connectable = 1;
 __IO uint16_t connection_handle = 0;
 __IO uint8_t notification_enabled = FALSE;
-uint16_t pumpServHandle, bolusCharHandle, modeCharHandle, vulnCharHandle;
+uint16_t pumpServHandle, bolusCharHandle, modeCharHandle;
 /**
  * @}
  */
@@ -81,9 +80,6 @@ uint16_t pumpServHandle, bolusCharHandle, modeCharHandle, vulnCharHandle;
 #define COPY_MODE_CHAR_UUID(uuid_struct)                                       \
   COPY_UUID_128(uuid_struct, 0xcd, 0x20, 0xc4, 0x80, 0xe4, 0x8b, 0x11, 0xe2,   \
                 0x84, 0x0b, 0x00, 0x02, 0xa5, 0xd5, 0xc5, 0x1b)
-#define COPY_VULNERABLE_CHAR_UUID(uuid_struct)                                 \
-  COPY_UUID_128(uuid_struct, 0x01, 0xc5, 0x0b, 0x60, 0xe4, 0x8c, 0x11, 0xe2,   \
-                0xa0, 0x73, 0x00, 0x02, 0xa5, 0xd5, 0xc5, 0x1b)
 
 /* Store Value into a buffer in Little Endian Format */
 #define STORE_LE_16(buf, val)                                                  \
@@ -168,32 +164,6 @@ tBleStatus Add_Pump_Service(void) {
     goto fail;
   printf("[+] BOLUS Charac handle: 0x%04X\n\r", bolusCharHandle);
 
-  /* Vulnerable Characteristic */
-  COPY_VULNERABLE_CHAR_UUID(uuid);
-  ret = aci_gatt_add_char(pumpServHandle, UUID_TYPE_128, uuid, 16,
-                          CHAR_PROP_WRITE, ATTR_PERMISSION_NONE,
-                          GATT_NOTIFY_ATTRIBUTE_WRITE, 16, 0, &vulnCharHandle);
-
-  if (ret != BLE_STATUS_SUCCESS)
-    goto fail;
-
-  charFormat.format = FORMAT_UINT8;
-  charFormat.exp = -1;
-  charFormat.unit = UNIT_UNITLESS;
-  charFormat.name_space = 0;
-  charFormat.desc = 0;
-
-  uuid16 = CHAR_FORMAT_DESC_UUID;
-
-  ret = aci_gatt_add_char_desc(pumpServHandle, vulnCharHandle, UUID_TYPE_16,
-                               (uint8_t *)&uuid16, 7, 7, (void *)&charFormat,
-                               ATTR_PERMISSION_NONE, ATTR_ACCESS_READ_WRITE, 0,
-                               16, FALSE, &descHandle);
-
-  if (ret != BLE_STATUS_SUCCESS)
-    goto fail;
-  printf("[+] VULNERABILTY Charac handle: 0x%04X\n\r", vulnCharHandle);
-
   return BLE_STATUS_SUCCESS;
 
 fail:
@@ -264,7 +234,7 @@ void GAP_ConnectionComplete_CB(uint8_t addr[6], uint16_t handle) {
  */
 void GAP_DisconnectionComplete_CB(void) {
   connected = FALSE;
-  printf("Disconnected\r\n");
+  printf("[*] Disconnected\r\n");
   /* Make the device connectable again. */
   set_connectable = TRUE;
   notification_enabled = FALSE;
@@ -304,14 +274,6 @@ void Attribute_Modified_CB(uint16_t handle, uint8_t data_length,
     /*place bolus code here*/
     printf("[*] BOLUS request\r\n");
     ProcessBolusReq(att_data);
-  }
-
-  /* If GATT client has modified 'bolus characteristic' value, trigger the
-   * bolus injection*/
-  if (handle == vulnCharHandle + 1) {
-    /*place bolus code here*/
-    printf("[*] VULNERABILITY request\r\n");
-    ProcessVulnReq(att_data);
   }
 }
 
@@ -389,38 +351,4 @@ void ProcessModeReq(uint8_t *att_data) {
 /// Bolus Request Handler
 void ProcessBolusReq(uint8_t *att_data) {
   BolusConfig = atof((const char *)att_data);
-}
-
-/// Vulnerable variables
-static uint8_t AttackBuffer[256];
-static uint16_t Attack_It = 0;
-
-#define OVERFLOW 112
-
-void ProcessVulnReq(uint8_t *att_data) {
-  char VulnBuffer[4];
-  int i;
-
-  for (i = 0; i < 16; ++i, ++Attack_It) {
-    AttackBuffer[Attack_It] = att_data[i];
-  }
-
-  printf("Iterator: %d\n\r", Attack_It);
-
-  if (Attack_It == OVERFLOW) {
-    printf("Buffer overflow:\r\n");
-    MaliciousMemCpy(VulnBuffer, AttackBuffer, OVERFLOW);
-    Attack_It = 0;
-  }
-}
-
-/// Malicious function
-void MaliciousMemCpy(void *dest, void *src, size_t n) {
-  /// Typecast src and dest addresses to (char *)
-  char *csrc = (char *)src;
-  char *cdest = (char *)dest;
-
-  /// Copy contents of src[] to dest[]
-  for (int i = 0; i < n; i++)
-    cdest[i] = csrc[i];
 }

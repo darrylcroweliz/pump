@@ -11,7 +11,7 @@
 // This program is part of the SecPump @https://github.com/r3glisss/SecPump
 
 /******************************************************************************
-  * @file    PumpService.h 
+  * @file    sensor_service.h 
   * @author  CL
   * @version V1.0.0
   * @date    04-July-2014
